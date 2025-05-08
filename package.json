@@ -1,0 +1,27 @@
+{
+  "name": "massmobilize",
+  "version": "1.0.0",
+  "description": "\"massmobilize twitter api\"",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/ArzaqDoudar/MassMobilize.git"
+  },
+  "keywords": [
+    "\"massmobilize",
+    "twitter",
+    "api\""
+  ],
+  "author": "\"arzaq ziad\"",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ArzaqDoudar/MassMobilize/issues"
+  },
+  "homepage": "https://github.com/ArzaqDoudar/MassMobilize#readme",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
