@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "\"massmobilize twitter api\"",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -22,6 +23,10 @@
   },
   "homepage": "https://github.com/ArzaqDoudar/MassMobilize#readme",
   "dependencies": {
-    "express": "^5.1.0"
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "oauth-1.0a": "^2.2.6",
+    "openai": "^4.98.0",
+    "twitter-api-sdk": "^1.2.1"
   }
 }
