@@ -5,6 +5,7 @@ import { hardCodesList, usersnameList, tweetsStaticData } from './staticData.js'
 let user = null;
 let cookie = null;
 const campaignData = {};
+var filterdTweetsArray = []
 
 const options = { method: 'GET', headers: { Authorization: `Bearer ${process.env.BEARER_TOKEN}` } };
 
@@ -37,13 +38,13 @@ async function getUserTweets(userId) {
 // this function used to filter the tweets by the hardcoded list
 function fillTweetsArray(tweets, username) {
     let tweetsArray = []
-    console.log('inseide filter fun');
+    // console.log('inseide filter fun');
     tweets.map((tweet) => {
         for (let index = 0; index < hardCodesList.length; index++) {
             const hardCode = hardCodesList[index];
             if (tweet.text.includes(hardCode)) {
                 tweetsArray.push(
-                    { id: tweet.id, text: tweet.text, url: `https://x.com/${username}/status/${tweet.id}` }
+                    { id: tweet.id, createdBy: username, text: tweet.text, url: `https://x.com/${username}/status/${tweet.id}` }
                 )
                 break
             }
@@ -129,32 +130,42 @@ const SendCampaign = async (data) => {
 
 (async () => {
     try {
-        // await Login("admin", "adminpass")
-        // if (user && cookie) {
-        //     SendCampaign({
-        //         "title": "test 13 may",
-        //         "description": "report tweet",
-        //         "actionUrl": "https://x.com/netanyahu/status/1918725267238834507",
-        //         "actionType": "report",
-        //     })
-        //     await SendCampaign(campaignData);
-        // }
 
-        usersnameList.map(async (username) => {
+        await Promise.all(usersnameList.map(async (username) => {
 
             const userId = await getUserIdFromUsername(username)
             if (userId) {
                 const tweets = await getUserTweets(userId)
-                const filterdTweetsArray = fillTweetsArray(tweets, username)
-
-                console.log('username  = ', username, 'userId = ', userId);
-                console.log('tweets:   ', tweets);
-                console.log('fillTweetsArray :   ', filterdTweetsArray);
-
+                if (tweets) {
+                    const tempArray = fillTweetsArray(tweets, username)
+                    filterdTweetsArray.push(...tempArray)
+                    console.log('username  = ', username, 'userId = ', userId);
+                    // console.log('tweets:   ', tweets);
+                } else {
+                    console.log('No Tweets founded');
+                }
             } else {
                 console.log('user not foud..................');
             }
-        })
+        }))
+        console.log('fillTweetsArray :   ', filterdTweetsArray);
+        console.log('fillTweetsArraylength :   ', filterdTweetsArray.length);
+
+
+        await Login("admin", "adminpass")
+        if (user && cookie) {
+            filterdTweetsArray.map(async (item) => {
+
+                SendCampaign({
+                    "title": item.createdBy,
+                    "description": item.text,
+                    "actionUrl": item.url,
+                    "actionType": "report",
+                })
+                await SendCampaign(campaignData);
+            })
+        }
+
     } catch (error) {
         console.log('Error: ', error);
     }

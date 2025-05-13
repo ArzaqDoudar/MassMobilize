@@ -100,9 +100,6 @@ export const usersnameList = [
     "joshua_landis",
     "walidphares",
     "raniakhalek",
-    "eyakoby",
-    "nm_iq1",
-    "ALI_AlSHMRRE",
 ]
 
 // export const usersnameList = [
