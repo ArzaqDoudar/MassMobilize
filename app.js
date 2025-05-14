@@ -4,13 +4,13 @@ import 'dotenv/config'
 import { hardCodesList, usersnameList, tweetsStaticData } from './staticData.js';
 let user = null;
 let cookie = null;
-const campaignData = {};
+var campaignData = {};
 var filterdTweetsArray = []
 
 const options = { method: 'GET', headers: { Authorization: `Bearer ${process.env.BEARER_TOKEN}` } };
 
 // this function used to return the user id from the user name in x platform
-async function getUserIdFromUsername(username) {
+async function GetUserIdFromUsername(username) {
     const url = `https://api.twitter.com/2/users/by/username/${username}`;
 
     const res = await fetch(url, options)
@@ -20,7 +20,7 @@ async function getUserIdFromUsername(username) {
     return data.data?.id;
 }
 // this function used retrieve last 10 tweets the user was posted
-async function getUserTweets(userId) {
+async function GetUserTweets(userId) {
     const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text`;
     // const url = `https://api.twitter.com/2/users/${userId}/tweets`;
 
@@ -36,7 +36,7 @@ async function getUserTweets(userId) {
     // return data;
 }
 // this function used to filter the tweets by the hardcoded list
-function fillTweetsArray(tweets, username) {
+function FilterTweetsArray(tweets, username) {
     let tweetsArray = []
     // console.log('inseide filter fun');
     tweets.map((tweet) => {
@@ -58,7 +58,7 @@ function fillTweetsArray(tweets, username) {
 // send requests to Mass Mobilize Backend to login as "admin" and get the cookie and user informations
 const Login = async (username, password) => {
 
-    await fetch("https://52bb672e-fcf6-4120-ac2a-9c6e34fb16a0-00-1d84z038fbfhk.spock.replit.dev/api/auth/login", {
+    await fetch(`${process.env.SERVER_URL}/api/auth/login`, {
         method: "POST",
         headers: {
             'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ const Login = async (username, password) => {
 }
 
 // this function used to fill the campaign object 
-const setCampaignData = (data) => {
+const SetCampaignData = (data) => {
 
     campaignData = {
         "title": data.title,
@@ -88,9 +88,8 @@ const setCampaignData = (data) => {
         "startDate": data.startDate || null,
         "endDate": data.endDate || null,
         "isActive": true,
-        "participantCount": 0,
-        "creator": user,
     }
+
     // campaignData = {
     //     "title": "test report from external backend 3",
     //     "description": "report tweet",
@@ -103,14 +102,19 @@ const setCampaignData = (data) => {
     //     "endDate": null,
     //     "isActive": true,
     //     "participantCount": 0,
-    //     "creator": user,
+    //     "creator": {
+    //        "id": user.id,
+    //        "username": user.username,
+    //        "organizationName": user.organizationName,
+    //        "profilePicture": user.profilePicture,
+    //      },
 
     // };
 }
 
 // send request to MM backend with campaign data to ceate new one 
 const SendCampaign = async (data) => {
-    await fetch("https://52bb672e-fcf6-4120-ac2a-9c6e34fb16a0-00-1d84z038fbfhk.spock.replit.dev/api/campaigns", {
+    await fetch(`${process.env.SERVER_URL}/api/campaigns`, {
         method: "POST",
         headers: {
             Cookie: cookie,
@@ -121,7 +125,7 @@ const SendCampaign = async (data) => {
         async response => {
             const data = await response.json()
             if (response.status == 201) {
-                console.log('Campaign Creates Succesfully ... ', data)
+                console.log('Campaign Creates Succesfully ... \n Campaign id = ', data.id)
             }
         }
     ).catch(error => { console.error() })
@@ -133,31 +137,28 @@ const SendCampaign = async (data) => {
 
         await Promise.all(usersnameList.map(async (username) => {
 
-            const userId = await getUserIdFromUsername(username)
+            const userId = await GetUserIdFromUsername(username)
             if (userId) {
-                const tweets = await getUserTweets(userId)
+                const tweets = await GetUserTweets(userId)
                 if (tweets) {
-                    const tempArray = fillTweetsArray(tweets, username)
+                    const tempArray = FilterTweetsArray(tweets, username)
                     filterdTweetsArray.push(...tempArray)
                     console.log('username  = ', username, 'userId = ', userId);
-                    // console.log('tweets:   ', tweets);
                 } else {
-                    console.log('No Tweets founded');
+                    console.log('No Tweets founded for user ', username);
                 }
             } else {
-                console.log('user not foud..................');
+                console.log(username, ' user not foud..................');
             }
         }))
-        console.log('fillTweetsArray :   ', filterdTweetsArray);
-        console.log('fillTweetsArraylength :   ', filterdTweetsArray.length);
+        console.log('filterdTweetsArraylength :   ', filterdTweetsArray.length);
 
-
-        await Login("admin", "adminpass")
-        if (user && cookie) {
+        await Login(process.env.LOGIN_USERNAME, process.env.LOGIN_PASSWORD)
+        if (user && cookie && filterdTweetsArray.length > 0) {
             filterdTweetsArray.map(async (item) => {
 
-                SendCampaign({
-                    "title": item.createdBy,
+                SetCampaignData({
+                    "title": `${item.createdBy} tweet`,
                     "description": item.text,
                     "actionUrl": item.url,
                     "actionType": "report",
