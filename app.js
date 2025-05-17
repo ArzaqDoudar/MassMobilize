@@ -1,55 +1,60 @@
 // require('dotenv').config();
 import 'dotenv/config'
 
-import { hardCodesList, usersnameList, tweetsStaticData } from './staticData.js';
+import { hardCodesList, usersnameList, twitterAccounts, tweetsStaticData } from './staticData.js';
 let user = null;
 let cookie = null;
 var campaignData = {};
 var filterdTweetsArray = []
+const tweetsIdSet = new Set()
+const userPerRequest = 5
+const numOfCycles = (twitterAccounts.length / userPerRequest)
 
 const options = { method: 'GET', headers: { Authorization: `Bearer ${process.env.BEARER_TOKEN}` } };
 
 // this function used to return the user id from the user name in x platform
-async function GetUserIdFromUsername(username) {
+const GetUserIdFromUsername = async (username) => {
     const url = `https://api.twitter.com/2/users/by/username/${username}`;
-
     const res = await fetch(url, options)
-
-
     const data = await res.json();
     return data.data?.id;
 }
 // this function used retrieve last 10 tweets the user was posted
-async function GetUserTweets(userId) {
-    const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text`;
-    // const url = `https://api.twitter.com/2/users/${userId}/tweets`;
-
-    // const res = await fetch(url, {
-    //     headers: {
-    //         'Authorization': `Bearer ${process.env.BEARER_TOKEN}`
-    //     }
-    // });
+const GetUserTweets = async (userId) => {
+    // const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text`;
+    const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text&expansions=attachments.media_keys&media.fields=url,type`;
     const res = await fetch(url, options)
-
     const data = await res.json();
-    return data.data;
-    // return data;
+    // return data.data;
+    return data;
 }
 // this function used to filter the tweets by the hardcoded list
-function FilterTweetsArray(tweets, username) {
+const FilterTweetsArray = (tweets, username) => {
+
+    let media = tweets.includes ? tweets.includes.media : []
     let tweetsArray = []
-    // console.log('inseide filter fun');
-    tweets.map((tweet) => {
+    console.log(`Filter the ${tweets.data.length}  tweets ${username} user : ----------------------- `);
+    tweets.data.map((tweet) => {// i change this and add .data 
         for (let index = 0; index < hardCodesList.length; index++) {
             const hardCode = hardCodesList[index];
             if (tweet.text.includes(hardCode)) {
-                tweetsArray.push(
-                    { id: tweet.id, createdBy: username, text: tweet.text, url: `https://x.com/${username}/status/${tweet.id}` }
-                )
-                break
+                if (!tweetsIdSet.has(tweet.id)) { // check if this tweet alreaddy added as campaign or not
+                    tweetsIdSet.add(tweet.id) // if not , add it to the set and insert it to the fillterd array
+                    const url = `https://x.com/${username}/status/${tweet.id}`;
+                    // let imageUrl = null
+                    // if (tweet.attachments) {
+                    //     let mediaObject = media.find(obj => obj.media_key === tweet.attachments.media_keys[0])
+                    //     if (mediaObject.type == "photo") {
+                    //         imageUrl = mediaObject.url
+                    //     }
+                    // }
+                    tweetsArray.push(
+                        { id: tweet.id, createdBy: username, text: tweet.text, url: url, createdAt: tweet.created_at, imageUrl: imageUrl }
+                    )
+                    break
+                } else { console.log("it's a duplicated tweet"); }
             }
         }
-
     })
     return tweetsArray
 }
@@ -89,7 +94,6 @@ const SetCampaignData = (data) => {
         "endDate": data.endDate || null,
         "isActive": true,
     }
-
     // campaignData = {
     //     "title": "test report from external backend 3",
     //     "description": "report tweet",
@@ -101,14 +105,6 @@ const SetCampaignData = (data) => {
     //     "startDate": null,
     //     "endDate": null,
     //     "isActive": true,
-    //     "participantCount": 0,
-    //     "creator": {
-    //        "id": user.id,
-    //        "username": user.username,
-    //        "organizationName": user.organizationName,
-    //        "profilePicture": user.profilePicture,
-    //      },
-
     // };
 }
 
@@ -126,46 +122,94 @@ const SendCampaign = async (data) => {
             const data = await response.json()
             if (response.status == 201) {
                 console.log('Campaign Creates Succesfully ... \n Campaign id = ', data.id)
+                console.log('image url = ', data.imageUrl)
             }
         }
     ).catch(error => { console.error() })
 
 }
 
+const TwitterPart = async (twitterAccounts) => {
+
+    await Promise.all(twitterAccounts.map(async (account) => {
+
+        const userId = account.id
+        if (userId) {
+            console.log('username  = ', account.username, ' , userId = ', userId);
+            const tweets = await GetUserTweets(userId)
+            if (tweets) {
+                const tempArray = FilterTweetsArray(tweets, account.username)
+                filterdTweetsArray.push(...tempArray)
+            } else {
+                console.log('No Tweets founded for user ', account.username);
+            }
+        } else {
+            console.log(account.username, ' account not foud..................');
+        }
+    }))
+    console.log('filterdTweetsArraylength :   ', filterdTweetsArray.length);
+
+}
+
+const MMPart = async () => {
+    // await Login(process.env.LOGIN_USERNAME, process.env.LOGIN_PASSWORD)
+    if (user && cookie && filterdTweetsArray.length > 0) {
+        filterdTweetsArray.map(async (item) => {
+            SetCampaignData({
+                "title": `${item.createdBy} tweet `,
+                "description": `${item.text}`,
+                "actionUrl": item.url,
+                "actionType": "report",
+                "imageUrl": item.imageUrl,
+            })
+            await SendCampaign(campaignData);
+        })
+    }
+}
+
+
+let intervalId;
+let runCount = 0;
+const runTask = async () => {
+    filterdTweetsArray = [] // clear array
+    console.log(`cycle ${runCount} at ${new Date().toLocaleString()}`);
+    const startPoint = runCount * userPerRequest
+    await TwitterPart(twitterAccounts.slice(startPoint, startPoint + userPerRequest));
+    await MMPart();
+    runCount++
+
+
+    if (runCount >= numOfCycles) {
+        clearInterval(intervalId);
+        runCount = 0;
+
+        setTimeout(() => {
+            console.log('1 hour wait finished. Restarting 15-minute cycle...');
+            startInterval();
+        }, 15 * 60 * 1000); // 1 hour = 3600000 ms
+    }
+
+}
+const startInterval = () => {
+    filterdTweetsArray = []
+    runTask();
+    intervalId = setInterval(runTask, 15 * 60 * 1000); // 15 minutes = 900000 ms
+}
+
 (async () => {
     try {
 
-        await Promise.all(usersnameList.map(async (username) => {
-
-            const userId = await GetUserIdFromUsername(username)
-            if (userId) {
-                const tweets = await GetUserTweets(userId)
-                if (tweets) {
-                    const tempArray = FilterTweetsArray(tweets, username)
-                    filterdTweetsArray.push(...tempArray)
-                    console.log('username  = ', username, 'userId = ', userId);
-                } else {
-                    console.log('No Tweets founded for user ', username);
-                }
-            } else {
-                console.log(username, ' user not foud..................');
-            }
-        }))
-        console.log('filterdTweetsArraylength :   ', filterdTweetsArray.length);
-
         await Login(process.env.LOGIN_USERNAME, process.env.LOGIN_PASSWORD)
-        if (user && cookie && filterdTweetsArray.length > 0) {
-            filterdTweetsArray.map(async (item) => {
+        startInterval()
 
-                SetCampaignData({
-                    "title": `${item.createdBy} tweet`,
-                    "description": item.text,
-                    "actionUrl": item.url,
-                    "actionType": "report",
-                })
-                await SendCampaign(campaignData);
-            })
-        }
+        // const tweets = await GetUserTweets("1249148165112160257")
+        // console.log('media', tweets.includes.media);
+        // tweets.data.map((tweet, index) => {
+        //     console.log('tweet ', index, " =>", tweet);
+        //     if (tweet.attachments) {
+        //         console.log("attachments => ", tweet.attachments)
+        //     }
+        // })
 
     } catch (error) {
         console.log('Error: ', error);
