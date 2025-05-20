@@ -1,13 +1,14 @@
 // require('dotenv').config();
 import 'dotenv/config'
 
-import { hardCodesList, usersnameList, twitterAccounts, tweetsStaticData } from './staticData.js';
+import { hardCodesList, usersnameList, twitterAccounts } from './staticData.js';
 let user = null;
 let cookie = null;
+var campaigns = []
 var campaignData = {};
 var filterdTweetsArray = []
 const tweetsIdSet = new Set()
-const userPerRequest = 5
+const userPerRequest = 10 //TODO change this to 10
 const numOfCycles = (twitterAccounts.length / userPerRequest)
 
 const options = { method: 'GET', headers: { Authorization: `Bearer ${process.env.BEARER_TOKEN}` } };
@@ -21,8 +22,12 @@ const GetUserIdFromUsername = async (username) => {
 }
 // this function used retrieve last 10 tweets the user was posted
 const GetUserTweets = async (userId) => {
+    const now = new Date()
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000); //2hours
+    const startTime = twoHoursAgo.toISOString();
+    console.log("startTime", startTime);
     // const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text`;
-    const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text&expansions=attachments.media_keys&media.fields=url,type`;
+    const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text&expansions=attachments.media_keys&media.fields=url,type&start_time=${startTime}`;
     const res = await fetch(url, options)
     const data = await res.json();
     // return data.data;
@@ -34,22 +39,15 @@ const FilterTweetsArray = (tweets, username) => {
     let media = tweets.includes ? tweets.includes.media : []
     let tweetsArray = []
     console.log(`Filter the ${tweets.data.length}  tweets ${username} user : ----------------------- `);
-    tweets.data.map((tweet) => {// i change this and add .data 
+    tweets.data.map((tweet) => {
         for (let index = 0; index < hardCodesList.length; index++) {
             const hardCode = hardCodesList[index];
             if (tweet.text.includes(hardCode)) {
                 if (!tweetsIdSet.has(tweet.id)) { // check if this tweet alreaddy added as campaign or not
                     tweetsIdSet.add(tweet.id) // if not , add it to the set and insert it to the fillterd array
                     const url = `https://x.com/${username}/status/${tweet.id}`;
-                    // let imageUrl = null
-                    // if (tweet.attachments) {
-                    //     let mediaObject = media.find(obj => obj.media_key === tweet.attachments.media_keys[0])
-                    //     if (mediaObject.type == "photo") {
-                    //         imageUrl = mediaObject.url
-                    //     }
-                    // }
                     tweetsArray.push(
-                        { id: tweet.id, createdBy: username, text: tweet.text, url: url, createdAt: tweet.created_at, imageUrl: imageUrl }
+                        { id: tweet.id, createdBy: username, text: tweet.text, url: url, createdAt: tweet.created_at }
                     )
                     break
                 } else { console.log("it's a duplicated tweet"); }
@@ -121,8 +119,13 @@ const SendCampaign = async (data) => {
         async response => {
             const data = await response.json()
             if (response.status == 201) {
-                console.log('Campaign Creates Succesfully ... \n Campaign id = ', data.id)
-                console.log('image url = ', data.imageUrl)
+                // save new campaigns in the array to check it after 2 days
+                const createdAt = new Date()
+                campaigns.push({
+                    "id": data.id,
+                    "createdAt": createdAt
+                })
+                console.log('Campaign Creates Succesfully ... \n Campaign id = ', data.id, " at = ", createdAt)
             }
         }
     ).catch(error => { console.error() })
@@ -137,7 +140,7 @@ const TwitterPart = async (twitterAccounts) => {
         if (userId) {
             console.log('username  = ', account.username, ' , userId = ', userId);
             const tweets = await GetUserTweets(userId)
-            if (tweets) {
+            if (tweets.data) {
                 const tempArray = FilterTweetsArray(tweets, account.username)
                 filterdTweetsArray.push(...tempArray)
             } else {
@@ -152,7 +155,6 @@ const TwitterPart = async (twitterAccounts) => {
 }
 
 const MMPart = async () => {
-    // await Login(process.env.LOGIN_USERNAME, process.env.LOGIN_PASSWORD)
     if (user && cookie && filterdTweetsArray.length > 0) {
         filterdTweetsArray.map(async (item) => {
             SetCampaignData({
@@ -160,11 +162,33 @@ const MMPart = async () => {
                 "description": `${item.text}`,
                 "actionUrl": item.url,
                 "actionType": "report",
-                "imageUrl": item.imageUrl,
             })
             await SendCampaign(campaignData);
         })
     }
+}
+
+const DeletePart = async () => {
+    // get the time 2 days ago
+    const now = new Date()
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(now.getDate() - 2)
+    console.log('twoDaysAgo = ', twoDaysAgo);
+    // filter campaigns array
+    console.log('campaigns befor delete = ', campaigns);
+    const filterdCampaignsToDelete = []
+    campaigns.map((campaign, index) => {
+        if (new Date(campaign.createdAt) < twoDaysAgo) { //TODO : change the > to <
+            filterdCampaignsToDelete.push(campaign)
+            campaigns = campaigns.slice(index, index)
+        }
+    })
+
+    console.log('filterdCampaignsToDelete = ', filterdCampaignsToDelete);
+    console.log('campaigns = ', campaigns);
+    // delete the capmaigns
+    filterdCampaignsToDelete.map(campaign => DeleteCampaign(campaign.id))
+
 }
 
 
@@ -183,33 +207,44 @@ const runTask = async () => {
         clearInterval(intervalId);
         runCount = 0;
 
+
+
         setTimeout(() => {
             console.log('1 hour wait finished. Restarting 15-minute cycle...');
+            // delete campaigns
+            DeletePart()
             startInterval();
-        }, 15 * 60 * 1000); // 1 hour = 3600000 ms
+        }, 75 * 60 * 1000); // 1:15 hour = 4500000 ms //TODO: change 1 to 60
     }
 
 }
 const startInterval = () => {
     filterdTweetsArray = []
     runTask();
-    intervalId = setInterval(runTask, 15 * 60 * 1000); // 15 minutes = 900000 ms
+    intervalId = setInterval(runTask, 15 * 60 * 1000); // 15 minutes = 900000 ms //TODO change 1 to 15
+}
+
+const DeleteCampaign = async (id) => {
+    await fetch(`${process.env.SERVER_URL}/api/campaigns/${id}/delete`, {
+        method: "POST",
+        headers: {
+            Cookie: cookie,
+            'Content-Type': 'application/json',
+        },
+    }).then(
+        async response => {
+            const data = await response.json()
+            console.log('data', data);
+        })
 }
 
 (async () => {
     try {
+        // const id = await GetUserIdFromUsername("test_arzaq")
+        // console.log('id', id);
 
         await Login(process.env.LOGIN_USERNAME, process.env.LOGIN_PASSWORD)
         startInterval()
-
-        // const tweets = await GetUserTweets("1249148165112160257")
-        // console.log('media', tweets.includes.media);
-        // tweets.data.map((tweet, index) => {
-        //     console.log('tweet ', index, " =>", tweet);
-        //     if (tweet.attachments) {
-        //         console.log("attachments => ", tweet.attachments)
-        //     }
-        // })
 
     } catch (error) {
         console.log('Error: ', error);
