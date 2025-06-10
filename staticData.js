@@ -62,8 +62,9 @@ export const usersnameList = [
 ]
 
 export const twitterAccounts = [
-    // { "username": "test_arzaq", id: "1924582098402197504" },
-    { "username": "joshua_landis", id: "569446928" },
+    { "username": "test_arzaq", id: "1924582098402197504" },
+
+    // { "username": "joshua_landis", id: "569446928" },
     { "username": "walidphares", id: "37535548" },
     { "username": "raniakhalek", id: "37501003" },
     { "username": "eyakoby", id: "1249148165112160257" },

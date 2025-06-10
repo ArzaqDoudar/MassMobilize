@@ -25,7 +25,7 @@ const GetUserTweets = async (userId) => {
     const now = new Date()
     const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000); //2hours
     const startTime = twoHoursAgo.toISOString();
-    console.log("startTime", startTime);
+    // console.log("startTime", startTime);
     // const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text`;
     const url = `https://api.twitter.com/2/users/${userId}/tweets?exclude=retweets,replies&tweet.fields=created_at,text&expansions=attachments.media_keys&media.fields=url,type&start_time=${startTime}`;
     const res = await fetch(url, options)
@@ -128,7 +128,7 @@ const SendCampaign = async (data) => {
                 console.log('Campaign Creates Succesfully ... \n Campaign id = ', data.id, " at = ", createdAt)
             }
         }
-    ).catch(error => { console.error() })
+    ).catch(error => { console.error(error) })
 
 }
 
@@ -170,12 +170,14 @@ const MMPart = async () => {
 
 const DeletePart = async () => {
     // get the time 2 days ago
+    console.log('\n\n***** ckeck if there is any expired capmaign (befor 2 h : just for demo) *****');
     const now = new Date()
     const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(now.getDate() - 2)
+    // twoDaysAgo.setDate(now.getDate() - 2) 
+    twoDaysAgo.setTime(now.getTime() - 2 * 60 * 60 * 1000) // TODO cahne this to 2 days before
     console.log('twoDaysAgo = ', twoDaysAgo);
     // filter campaigns array
-    console.log('campaigns befor delete = ', campaigns);
+    console.log('campaigns array befor delete = ', campaigns);
     const filterdCampaignsToDelete = []
     campaigns.map((campaign, index) => {
         if (new Date(campaign.createdAt) < twoDaysAgo) { //TODO : change the > to <
@@ -196,7 +198,8 @@ let intervalId;
 let runCount = 0;
 const runTask = async () => {
     filterdTweetsArray = [] // clear array
-    console.log(`cycle ${runCount} at ${new Date().toLocaleString()}`);
+    console.log('',);
+    console.log(`__________________ cycle ${runCount + 1} at ${new Date().toLocaleString()}__________________`);
     const startPoint = runCount * userPerRequest
     await TwitterPart(twitterAccounts.slice(startPoint, startPoint + userPerRequest));
     await MMPart();
@@ -206,15 +209,12 @@ const runTask = async () => {
     if (runCount >= numOfCycles) {
         clearInterval(intervalId);
         runCount = 0;
-
-
-
         setTimeout(() => {
             console.log('1 hour wait finished. Restarting 15-minute cycle...');
             // delete campaigns
             DeletePart()
             startInterval();
-        }, 75 * 60 * 1000); // 1:15 hour = 4500000 ms //TODO: change 1 to 60
+        }, 15 * 60 * 1000); // 1:15 hour = 4500000 ms //TODO: change 1 to 60 or 15 t 75
     }
 
 }
@@ -250,3 +250,5 @@ const DeleteCampaign = async (id) => {
         console.log('Error: ', error);
     }
 })();
+
+// "Sign up for future campaigns from this organization here: [link]"
